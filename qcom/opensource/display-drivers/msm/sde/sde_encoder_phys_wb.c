@@ -747,6 +747,10 @@ static void _sde_encoder_phys_wb_setup_ctl(struct sde_encoder_phys *phys_enc,
 	hw_cdm = phys_enc->hw_cdm;
 	hw_dnsc_blur = phys_enc->hw_dnsc_blur;
 	ctl = phys_enc->hw_ctl;
+#ifdef MI_DISPLAY_MODIFY
+	if (!ctl)
+		return;
+#endif
 	need_merge = !(_sde_encoder_is_single_lm_partial_update(wb_enc));
 
 	if (test_bit(SDE_CTL_ACTIVE_CFG, &ctl->caps->features) &&
@@ -1865,10 +1869,11 @@ static void _sde_encoder_phys_wb_frame_done_helper(void *arg, bool frame_error)
 	struct sde_encoder_phys *phys_enc = &wb_enc->base;
 	u32 event = frame_error ? SDE_ENCODER_FRAME_EVENT_ERROR : 0;
 	u32 ubwc_error = 0;
+	bool in_clone_mode = phys_enc->in_clone_mode;
 	unsigned long flags;
 
 	/* don't notify upper layer for internal commit */
-	if (phys_enc->enable_state == SDE_ENC_DISABLING && !phys_enc->in_clone_mode)
+	if (phys_enc->enable_state == SDE_ENC_DISABLING && !in_clone_mode)
 		goto end;
 
 	spin_lock_irqsave(phys_enc->enc_spinlock, flags);
@@ -1888,7 +1893,7 @@ static void _sde_encoder_phys_wb_frame_done_helper(void *arg, bool frame_error)
 			event |= SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE;
 		}
 
-		if (phys_enc->in_clone_mode)
+		if (in_clone_mode)
 			event |= SDE_ENCODER_FRAME_EVENT_CWB_DONE
 					| SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE;
 		else
@@ -1899,7 +1904,7 @@ static void _sde_encoder_phys_wb_frame_done_helper(void *arg, bool frame_error)
 	if (event & SDE_ENCODER_FRAME_EVENT_DONE)
 		phys_enc->parent_ops.handle_frame_done(phys_enc->parent, phys_enc, event);
 
-	if (!phys_enc->in_clone_mode && phys_enc->parent_ops.handle_vblank_virt)
+	if (!in_clone_mode && phys_enc->parent_ops.handle_vblank_virt)
 		phys_enc->parent_ops.handle_vblank_virt(phys_enc->parent, phys_enc);
 
 end:
@@ -1908,7 +1913,7 @@ end:
 		wb_enc->hw_wb->ops.get_ubwc_error(wb_enc->hw_wb);
 		wb_enc->hw_wb->ops.clear_ubwc_error(wb_enc->hw_wb);
 	}
-	SDE_EVT32_IRQ(DRMID(phys_enc->parent), WBID(wb_enc), phys_enc->in_clone_mode,
+	SDE_EVT32_IRQ(DRMID(phys_enc->parent), WBID(wb_enc), in_clone_mode,
 			phys_enc->enable_state, event, atomic_read(&phys_enc->pending_kickoff_cnt),
 			atomic_read(&phys_enc->pending_retire_fence_cnt),
 			ubwc_error, frame_error);
@@ -2202,6 +2207,7 @@ static int _sde_encoder_phys_wb_wait_for_idle(struct sde_encoder_phys *phys_enc,
 			phys_enc->in_clone_mode);
 		SDE_EVT32(DRMID(phys_enc->parent), WBID(wb_enc),
 			atomic_read(&phys_enc->pending_kickoff_cnt), SDE_EVTLOG_ERROR);
+		SDE_DBG_DUMP(SDE_DBG_BUILT_IN_ALL, "panic");
 		goto frame_done;
 	}
 
@@ -2292,6 +2298,7 @@ static int sde_encoder_phys_wb_wait_for_commit_done(struct sde_encoder_phys *phy
 					atomic_read(&phys_enc->pending_kickoff_cnt), is_idle, rc);
 			SDE_ERROR("[enc:%d, wb:%d] failed wait_for_idle; ret:%d\n",
 					DRMID(phys_enc->parent), WBID(wb_enc), rc);
+			SDE_DBG_DUMP(SDE_DBG_BUILT_IN_ALL, "panic");
 		}
 	}
 

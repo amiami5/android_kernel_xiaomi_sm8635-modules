@@ -1322,6 +1322,7 @@ int dsi_display_clk_ctrl(void *handle,
 {
 	int rc = 0;
 
+
 	if ((!handle) || (clk_type > DSI_ALL_CLKS) ||
 			(clk_state > DSI_CLK_EARLY_GATE)) {
 		DSI_ERR("Invalid arg\n");
