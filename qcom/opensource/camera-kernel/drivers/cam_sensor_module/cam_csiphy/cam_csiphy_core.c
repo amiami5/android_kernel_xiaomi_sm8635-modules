@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -508,7 +508,6 @@ static int cam_csiphy_update_secure_info(struct csiphy_device *csiphy_dev, int32
 
 	switch (cpas_version) {
 	case CAM_CPAS_TITAN_640_V200:
-	case CAM_CPAS_TITAN_665_V100:
 	case CAM_CPAS_TITAN_770_V100:
 		bit_offset_bet_phys_in_cp_ctrl =
 			CAM_CSIPHY_MAX_DPHY_LANES + CAM_CSIPHY_MAX_CPHY_LANES + 1;
@@ -1198,16 +1197,24 @@ static int cam_csiphy_cphy_data_rate_config(struct csiphy_device *csiphy_device,
 				cam_io_w_mb(reg_data,
 					csiphybase + reg_addr);
 			break;
+/* xiaomi add channel log - begin */
 			case CSIPHY_SHORT_CHANNEL_PARAMS:
 				if (channel_type == CAM_CSIPHY_DATARATE_SHORT_CHANNEL)
+				{
 					cam_io_w_mb(reg_data,
 						csiphybase + reg_addr);
+					CAM_DBG(CAM_CSIPHY, "param_type:%d,channel_type == CAM_CSIPHY_DATARATE_SHORT_CHANNEL",reg_param_type);
+				}
 			break;
 			case CSIPHY_STANDARD_CHANNEL_PARAMS:
 				if (channel_type == CAM_CSIPHY_DATARATE_STANDARD_CHANNEL)
+				{
 					cam_io_w_mb(reg_data,
 						csiphybase + reg_addr);
+					CAM_DBG(CAM_CSIPHY, "param_type:%d,channel_type == CAM_CSIPHY_DATARATE_STANDARD_CHANNEL",reg_param_type);
+				}
 			break;
+/* xiaomi add channel log - end */
 			case CSIPHY_SETTLE_CNT_LOWER_BYTE:
 				cam_io_w_mb(settle_cnt & 0xFF,
 					csiphybase + reg_addr);
@@ -1452,6 +1459,17 @@ int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev,
 	do_div(intermediate_var, 200000000);
 	settle_cnt = intermediate_var;
 	skew_cal_enable = csiphy_dev->csiphy_info[index].mipi_flags;
+
+	/* xiaomi add DPHY log - begin */
+	if (!csiphy_dev->csiphy_info[index].csiphy_3phase){
+		for (i = 0; i < cfg_size; i++) {
+			CAM_DBG(MI_DEBUG,
+				"register index: %d/%d, param_type: %d, writing reg: %x, val: %x, delay: %dus",
+				i, cfg_size, reg_array[i].csiphy_param_type, reg_array[i].reg_addr,
+				reg_array[i].reg_data, reg_array[i].delay);
+		}
+	}
+	/* xiaomi add DPHY log - end */
 
 	for (i = 0; i < cfg_size; i++) {
 		switch (reg_array[i].csiphy_param_type) {
@@ -2075,6 +2093,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 	uint32_t      cphy_trio_status;
 	void __iomem *csiphybase;
 	int32_t              rc = 0;
+	uint32_t             i;
 
 	if (!csiphy_dev || !cmd) {
 		CAM_ERR(CAM_CSIPHY, "Invalid input args");
@@ -2485,11 +2504,10 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 	case CAM_START_DEV: {
 		struct cam_csiphy_param *param;
 		struct cam_start_stop_dev_cmd config;
-		int32_t i, offset;
+		int32_t offset;
 		int clk_vote_level_high = -1;
 		int clk_vote_level_low = -1;
 		uint8_t data_rate_variant_idx = 0;
-		unsigned long clk_rate = 0;
 
 		CAM_DBG(CAM_CSIPHY, "START_DEV Called");
 		rc = copy_from_user(&config, (void __user *)cmd->handle,
@@ -2574,29 +2592,6 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 					rc = -EINVAL;
 					goto release_mutex;
 
-				}
-
-				for (i = 0; i < csiphy_dev->soc_info.num_clk;
-									i++) {
-					if (i ==
-					csiphy_dev->soc_info.src_clk_idx) {
-						CAM_DBG(CAM_CSIPHY,
-						"Skipping call back for src"
-						" clk %s",
-						csiphy_dev->soc_info.clk_name[
-									i]);
-						continue;
-					}
-					clk_rate =
-					cam_soc_util_get_clk_rate_applied(
-						&csiphy_dev->soc_info, i,
-						false, clk_vote_level_high);
-					if (clk_rate > 0) {
-						cam_subdev_notify_message(
-						CAM_TFE_DEVICE_TYPE,
-					CAM_SUBDEV_MESSAGE_CLOCK_UPDATE,
-						(void *)(&clk_rate));
-					}
 				}
 			}
 
