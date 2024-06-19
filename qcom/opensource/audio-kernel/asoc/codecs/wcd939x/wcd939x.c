@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
-
+#define DEBUG
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
@@ -752,6 +752,12 @@ static int wcd939x_rx_clk_enable(struct snd_soc_component *component, int rx_num
 	}
 	wcd939x->rx_clk_cnt++;
 
+	if (wcd939x->hph_pcm_enabled && (rx_num != WCD_RX3)) {
+		snd_soc_component_update_bits(component,
+				REG_FIELD_VALUE(PA_GAIN_CTL_L, RX_SUPPLY_LEVEL, 0x01));
+		snd_soc_component_update_bits(component,
+				REG_FIELD_VALUE(VNEG_CTRL_4, ILIM_SEL, 0x02));
+	}
 	return 0;
 }
 
@@ -1097,6 +1103,55 @@ static int wcd939x_config_xtalk(struct snd_soc_component *component,
 			snd_soc_component_read(component, xtalk_sec0),
 			snd_soc_component_read(component, xtalk_sec1));
 
+		/* for HPHL XTALK */
+//		if(xtalk_indx == 0) {
+			/* xtalk_sec0: WCD939X_HPHL_RX_PATH_SEC0 - 0x3521 */
+			/* xtalk_sec1: WCD939X_HPHL_RX_PATH_SEC1 - 0x3522 */
+//			snd_soc_component_update_bits(component, xtalk_sec1, 0xFF, 0x42);
+//			snd_soc_component_update_bits(component, xtalk_sec0, 0x1F, 0x05);
+//		}
+		/* for HPHR XTALK */
+//		if(xtalk_indx == 1) {
+			/* xtalk_sec0: WCD939X_HPHR_RX_PATH_SEC0 - 0x3525 */
+			/* xtalk_sec1: WCD939X_HPHR_RX_PATH_SEC1 - 0x3526 */
+//			snd_soc_component_update_bits(component, xtalk_sec1, 0xFF, 0x44);
+//			snd_soc_component_update_bits(component, xtalk_sec0, 0x1F, 0x05);
+//		}
+
+//#if defined(CONFIG_TARGET_PRODUCT_SHENNONG)
+		/* for HPHL XTALK */
+//		if(xtalk_indx == 0) {
+			/* xtalk_sec0: WCD939X_HPHL_RX_PATH_SEC0 - 0x3521 */
+			/* xtalk_sec1: WCD939X_HPHL_RX_PATH_SEC1 - 0x3522 */
+//			snd_soc_component_update_bits(component, xtalk_sec1, 0xFF, 0x0B);
+//			snd_soc_component_update_bits(component, xtalk_sec0, 0x1F, 0x05);
+//		}
+		/* for HPHR XTALK */
+//		if(xtalk_indx == 1) {
+			/* xtalk_sec0: WCD939X_HPHR_RX_PATH_SEC0 - 0x3525 */
+			/* xtalk_sec1: WCD939X_HPHR_RX_PATH_SEC1 - 0x3526 */
+//			snd_soc_component_update_bits(component, xtalk_sec1, 0xFF, 0x0B);
+//			snd_soc_component_update_bits(component, xtalk_sec0, 0x1F, 0x05);
+//		}
+//#endif
+
+#if defined(CONFIG_TARGET_PRODUCT_MANET)
+                /* for HPHL XTALK */
+                if(xtalk_indx == 0) {
+                        /* xtalk_sec0: WCD939X_HPHL_RX_PATH_SEC0 - 0x3521 */
+                        /* xtalk_sec1: WCD939X_HPHL_RX_PATH_SEC1 - 0x3522 */
+                        snd_soc_component_update_bits(component, xtalk_sec1, 0xFF, 0x42);
+                        snd_soc_component_update_bits(component, xtalk_sec0, 0x1F, 0x06);
+                }
+                /* for HPHR XTALK */
+                if(xtalk_indx == 1) {
+                        /* xtalk_sec0: WCD939X_HPHR_RX_PATH_SEC0 - 0x3525 */
+                        /* xtalk_sec1: WCD939X_HPHR_RX_PATH_SEC1 - 0x3526 */
+                        snd_soc_component_update_bits(component, xtalk_sec1, 0xFF, 0x44);
+                        snd_soc_component_update_bits(component, xtalk_sec0, 0x1F, 0x06);
+                }
+#endif
+
 		snd_soc_component_update_bits(component, xtalk_sec3, 0xFF, 0x4F);
 		snd_soc_component_update_bits(component, xtalk_sec2, 0x1F, 0x11);
 
@@ -1372,6 +1427,8 @@ static int wcd939x_codec_ear_dac_event(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_PRE_PMU:
 		snd_soc_component_update_bits(component,
 				REG_FIELD_VALUE(CDC_EAR_GAIN_CTL, EAR_EN, 0x01));
+		snd_soc_component_update_bits(component,
+				REG_FIELD_VALUE(CDC_DIG_CLK_CTL, RXD2_CLK_EN, 0x01));
 
 		snd_soc_component_update_bits(component,
 				REG_FIELD_VALUE(EAR_DAC_CON, DAC_SAMPLE_EDGE_SEL, 0x00));
@@ -1385,6 +1442,8 @@ static int wcd939x_codec_ear_dac_event(struct snd_soc_dapm_widget *w,
 			REG_FIELD_VALUE(VNEG_CTRL_4, ILIM_SEL, 0xD));
 		break;
 	case SND_SOC_DAPM_POST_PMD:
+		snd_soc_component_update_bits(component,
+				REG_FIELD_VALUE(CDC_DIG_CLK_CTL, RXD2_CLK_EN, 0x00));
 		snd_soc_component_update_bits(component,
 				REG_FIELD_VALUE(EAR_DAC_CON, DAC_SAMPLE_EDGE_SEL, 0x01));
 		break;
@@ -3606,6 +3665,9 @@ static const struct snd_kcontrol_new wcd9390_snd_controls[] = {
 };
 
 static const struct snd_kcontrol_new wcd9395_snd_controls[] = {
+	SOC_ENUM_EXT("EAR PA GAIN", wcd939x_ear_pa_gain_enum,
+		wcd939x_ear_pa_gain_get, wcd939x_ear_pa_gain_put),
+
 	SOC_ENUM_EXT("RX HPH Mode", rx_hph_mode_mux_enum,
 		wcd939x_rx_hph_mode_get, wcd939x_rx_hph_mode_put),
 
@@ -4706,19 +4768,19 @@ static int wcd939x_reset(struct device *dev)
 	if (rc) {
 		dev_err_ratelimited(dev, "%s: wcd sleep state request fail!\n",
 				__func__);
-		return -EPROBE_DEFER;
+		return rc;
 	}
 	/* 20us sleep required after pulling the reset gpio to LOW */
-	usleep_range(80, 85);
+	usleep_range(20, 30);
 
 	rc = msm_cdc_pinctrl_select_active_state(wcd939x->rst_np);
 	if (rc) {
 		dev_err_ratelimited(dev, "%s: wcd active state request fail!\n",
 				__func__);
-		return -EPROBE_DEFER;
+		return rc;
 	}
 	/* 20us sleep required after pulling the reset gpio to HIGH */
-	usleep_range(80, 85);
+	usleep_range(20, 30);
 
 	/* Set OVP threshold to 4.2V after reset */
 #if IS_ENABLED(CONFIG_QCOM_WCD_USBSS_I2C)
@@ -4919,7 +4981,7 @@ static void wcd939x_dt_parse_usbcss_hs_info(struct device *dev,
 	} else
 		dev_dbg(dev, "%s: %s property not found. Default value of %s used.\n",
 			__func__, "qcom,usbcss-hs-xtalk-config", "XTALK_NONE");
-
+	usbcss_hs->xtalk.xtalk_config = XTALK_DIGITAL;
 	/* k values for linearizer */
 	if (of_find_property(dev->of_node, "qcom,usbcss-hs-lin-k-aud", NULL)) {
 		rc = wcd939x_read_of_property_s32(dev, "qcom,usbcss-hs-lin-k-aud",
@@ -5497,11 +5559,7 @@ static int wcd939x_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_lock_init;
 
-	ret = wcd939x_reset(dev);
-	if (ret == -EPROBE_DEFER) {
-		dev_err(dev, "%s: wcd reset failed!\n", __func__);
-		goto err_lock_init;
-	}
+	wcd939x_reset(dev);
 
 	wcd939x->wakeup = wcd939x_wakeup;
 

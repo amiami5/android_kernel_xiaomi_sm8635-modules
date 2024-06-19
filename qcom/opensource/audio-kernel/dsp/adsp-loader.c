@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2014, 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -67,6 +67,20 @@ static struct work_struct adsp_ldr_work;
 static struct platform_device *adsp_private;
 static void adsp_loader_unload(struct platform_device *pdev);
 
+#ifdef AUDIO_SILENT_OBSERVER
+extern ssize_t xlogchar_kwrite(const char __user *buf, size_t count);
+static int report_audio_silent_to_onetrack(int level, const char* scenario, const char* location,
+							const char* silent_reason, int silent_type, const char* source_sink,
+							const char* audio_device, const char* extra_info)
+{
+	char msg[512];
+	const char* format = "{\"name\":\"audio_silent_observer\",\"audio_event\":{\"scenario\":\"%s\", \"location\":\"%s\", \"silent_reason\":\"%s\", \"level\":\"%d\",\"silent_type\":\"%d\", \"source_sink\":\"%s\", \"audio_device\":\"%s\", \"extra_info\":\"%s\"},\"dgt\":\"null\",\"audio_ext\":\"null\" }";
+	snprintf(msg, sizeof(msg) - 1, format, scenario, location, silent_reason, level, silent_type, source_sink, audio_device, extra_info);
+	xlogchar_kwrite(msg, sizeof(msg));
+	pr_info("%s: send msg %s", __func__, msg);
+	return 0;
+}
+#endif
 
 static void adsp_load_fw(struct work_struct *adsp_ldr_work)
 {
@@ -223,6 +237,9 @@ static ssize_t adsp_ssr_store(struct kobject *kobj,
 	rproc_shutdown(adsp_dev);
 	adsp_loader_do(adsp_private);
 
+#ifdef AUDIO_SILENT_OBSERVER
+	report_audio_silent_to_onetrack(0, "", __FILE__, "ADSP restarted", 3, "", "DSP", "");
+#endif
 	dev_dbg(&pdev->dev, "%s :: ADSP restarted\n", __func__);
 	return count;
 }
@@ -348,7 +365,6 @@ static int adsp_loader_probe(struct platform_device *pdev)
 	size_t len;
 	u32 *buf;
 	const char **adsp_fw_name_array = NULL;
-	const char **adsp_dtb_fw_name_array = NULL;
 	int adsp_fw_cnt;
 	u32* adsp_fw_bit_values = NULL;
 	int i;
@@ -505,20 +521,6 @@ static int adsp_loader_probe(struct platform_device *pdev)
 		goto wqueue;
 	}
 
-	adsp_dtb_fw_name_array = devm_kzalloc(&pdev->dev,
-				adsp_fw_cnt * sizeof(char *), GFP_KERNEL);
-
-	/* Read ADSP dtb firmware image names */
-	ret = of_property_read_string_array(pdev->dev.of_node,
-					"adsp-dtb-fw-names",
-					adsp_dtb_fw_name_array,
-					adsp_fw_cnt);
-	if (ret < 0) {
-		dev_dbg(&pdev->dev, "%s: unable to read adsp-dtb-fw-names\n",
-			__func__);
-		goto wqueue;
-	}
-
 	for (i = 0; i < adsp_fw_cnt; i++) {
 		if (adsp_fw_bit_values[i] == adsp_var_idx) {
 			fw_name_size = strlen(adsp_fw_name_array[i]) + 1;
@@ -528,15 +530,6 @@ static int adsp_loader_probe(struct platform_device *pdev)
 			if (!priv->adsp_fw_name)
 				goto wqueue;
 			strlcpy(priv->adsp_fw_name, adsp_fw_name_array[i],
-				fw_name_size);
-
-			fw_name_size = strlen(adsp_dtb_fw_name_array[i]) + 1;
-			priv->adsp_dtb_name = devm_kzalloc(&pdev->dev,
-						fw_name_size,
-						GFP_KERNEL);
-			if (!priv->adsp_dtb_name)
-				goto wqueue;
-			strscpy(priv->adsp_dtb_name, adsp_dtb_fw_name_array[i],
 				fw_name_size);
 			break;
 		}

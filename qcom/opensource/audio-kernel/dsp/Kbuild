@@ -24,11 +24,6 @@ ifeq ($(CONFIG_SND_SOC_AUTO), y)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/sa6155autoconf.h
 	endif
-	ifdef CONFIG_SND_SOC_GVM
-		include $(AUDIO_ROOT)/config/gvmauto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
-	endif
 	ifdef CONFIG_SND_SOC_SA7255
 		include $(AUDIO_ROOT)/config/sa7255auto.conf
 		export
@@ -225,6 +220,10 @@ CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
 		-Wall\
 		-Werror\
 		-D__linux__
+
+ifneq (, $(filter $(word 2,$(subst _, ,$(TARGET_PRODUCT))), chenfeng))
+	CDEFINES += -DAUDIO_SILENT_OBSERVER
+endif
 
 KBUILD_CPPFLAGS += $(CDEFINES)
 
